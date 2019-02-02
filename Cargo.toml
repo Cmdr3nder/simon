@@ -1,0 +1,11 @@
+[package]
+name = "hello-rpi"
+version = "0.1.0"
+authors = ["Andrew Bowers <andrew.bowers@agamecoder.com>"]
+edition = "2018"
+
+[dependencies]
+tui = "0.3.0"
+termion = "1.5.1"
+failure = "0.1.5"
+rand = "0.6.5"
