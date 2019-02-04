@@ -2,6 +2,8 @@
 mod util;
 
 use std::io;
+use std::fs::{self, DirEntry};
+use std::path::{Path, PathBuf};
 
 use termion::event::Key;
 use termion::input::MouseTerminal;
@@ -11,19 +13,12 @@ use tui::backend::{Backend, TermionBackend};
 use tui::layout::{Constraint, Layout, Rect};
 use tui::style::{Color, Modifier, Style};
 use tui::widgets::{
-    Block, Borders, Paragraph, SelectableList, Tabs, Text, Widget,
+    Block, Borders, SelectableList, Tabs, Widget,
 };
 use tui::{Frame, Terminal};
 
 use crate::util::event::{Event, Events};
 use crate::util::TabsState;
-
-struct Server<'a> {
-    name: &'a str,
-    location: &'a str,
-    coords: (f64, f64),
-    status: &'a str,
-}
 
 struct MediaItem<'a> {
     name: &'a str,
@@ -50,22 +45,26 @@ fn main() -> Result<(), failure::Error> {
 
     let events = Events::new();
 
+    let video_path = Path::new("/mnt/Data/Videos");
+    let video = find_files(&video_path, &|entry| {
+        match entry.path().extension() {
+            Some(ext) => match ext.to_str().unwrap() {
+                "mp4" => true,
+                "mkv" => true,
+                "wmv" => true,
+                _ => false
+            },
+            None => false
+        }
+    });
+    let video: Vec<MediaItem> = video.iter().map(|path| MediaItem {
+        name: path.file_name().unwrap().to_str().unwrap(),
+        path: path.to_str().unwrap(),
+    }).collect();
+
     let mut app = App {
         tabs: TabsState::new(vec!["Video", "Audio"]),
-        video: vec![
-            MediaItem {
-                name: "Good Eats 01-01 'Crabby Talk'",
-                path: "/home/andrew/media/video/good-eats/Good Eats 01-01 'Crabby Talk'.mp4"
-            },
-            MediaItem {
-                name: "Good Eats 01-02 'Lobster Talk'",
-                path: "/home/andrew/media/video/good-eats/Good Eats 01-02 'Lobster Talk'.mp4"
-            },
-            MediaItem {
-                name: "Good Eats 01-03 'Ice Cream You Scream'",
-                path: "/home/andrew/media/video/good-eats/Good Eats 01-02 'Lobster Talk'.mp4"
-            },
-        ],
+        video,
         selected_video: 0,
         audio: vec![
             MediaItem {
@@ -137,8 +136,41 @@ fn main() -> Result<(), failure::Error> {
     Ok(())
 }
 
+fn visit_files<F>(dir: &Path, cb: &mut F) -> io::Result<()>
+where
+    F: FnMut(&DirEntry)
+{
+    if dir.is_dir() {
+        for entry in fs::read_dir(dir)? {
+            let entry = entry?;
+            let path = entry.path();
+
+            if path.is_dir() {
+                visit_files(&path, cb)?;
+            } else {
+                cb(&entry);
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn find_files(dir: &Path, filter: &Fn(&DirEntry) -> bool) -> Vec<PathBuf> {
+    let mut result = Vec::new();
+
+    match visit_files(dir, &mut |file_entry| {
+        if filter(file_entry) {
+            result.push(file_entry.path());
+        }
+    }) {
+        Ok(_) => result,
+        Err(_) => vec![] // TODO: Log this error.
+    }
+}
+
 fn increment_wrap(current: usize, length: usize) -> usize {
-    if (current == length - 1) {
+    if current == length - 1 {
         return 0;
     }
 
@@ -146,7 +178,7 @@ fn increment_wrap(current: usize, length: usize) -> usize {
 }
 
 fn decrement_wrap(current: usize, length: usize) -> usize {
-    if (current == 0) {
+    if current == 0 {
         return length - 1;
     }
 
@@ -184,34 +216,3 @@ where
         .render(f, area);
 }
 
-fn draw_text<B>(f: &mut Frame<B>, area: Rect)
-where
-    B: Backend,
-{
-    let text = [
-        Text::raw("This is a paragraph with several lines. You can change style your text the way you want.\n\nFox example: "),
-        Text::styled("under", Style::default().fg(Color::Red)),
-        Text::raw(" "),
-        Text::styled("the", Style::default().fg(Color::Green)),
-        Text::raw(" "),
-        Text::styled("rainbow", Style::default().fg(Color::Blue)),
-        Text::raw(".\nOh and if you didn't "),
-        Text::styled("notice", Style::default().modifier(Modifier::Italic)),
-        Text::raw(" you can "),
-        Text::styled("automatically", Style::default().modifier(Modifier::Bold)),
-        Text::raw(" "),
-        Text::styled("wrap", Style::default().modifier(Modifier::Invert)),
-        Text::raw(" your "),
-        Text::styled("text", Style::default().modifier(Modifier::Underline)),
-        Text::raw(".\nOne more thing is that it should display unicode characters: 10€")
-    ];
-    Paragraph::new(text.iter())
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title("Footer")
-                .title_style(Style::default().fg(Color::Magenta).modifier(Modifier::Bold)),
-        )
-        .wrap(true)
-        .render(f, area);
-}
