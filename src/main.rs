@@ -29,17 +29,27 @@ use crate::settings::{TabSettings, settings_from_file};
 use crate::util::SelectLoop;
 use crate::util::event::{Event, Events};
 
-pub struct Tab {
-    settings: TabSettings,
+enum TabType {
+    Media(MediaTab),
+    Download
+}
+
+struct Tab<'a> {
+    name: &'a str,
+    tab_type: TabType,
+}
+
+struct MediaTab {
     media: Option<SelectLoop<PathBuf>>,
     subs: Option<SelectLoop<PathBuf>>,
 }
 
-struct App {
-    tabs: SelectLoop<Tab>,
+struct App<'a> {
+    tabs: SelectLoop<Tab<'a>>,
 }
 
 fn main() -> Result<(), failure::Error> {
+    let settings = settings_from_file("conf/simon.config.toml");
     let mut app = build_app(settings);
 
     let stdout = io::stdout().into_raw_mode()?;
@@ -115,7 +125,7 @@ fn main() -> Result<(), failure::Error> {
     Ok(())
 }
 
-fn build_app(settings: HashMap<String, TabSettings>) -> App {
+fn build_app<'a>(settings: Vec<&TabSettings>) -> App<'a> {
     App {
         tabs: SelectLoop {
             items: vec![],
