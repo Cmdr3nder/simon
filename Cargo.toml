@@ -1,5 +1,5 @@
 [package]
-name = "hello-rpi"
+name = "simon"
 version = "0.1.0"
 authors = ["Andrew Bowers <andrew.bowers@agamecoder.com>"]
 edition = "2018"
