@@ -6,14 +6,13 @@ extern crate config;
 extern crate serde_derive;
 
 mod util;
+mod settings;
 
 use std::io;
-use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::fs::{self, DirEntry};
 use std::path::{Path, PathBuf};
 
-use config::{Config, File};
 use termion::event::Key;
 use termion::input::MouseTerminal;
 use termion::raw::IntoRawMode;
@@ -26,18 +25,9 @@ use tui::widgets::{
 };
 use tui::{Frame, Terminal};
 
+use crate::settings::{TabSettings, settings_from_file};
+use crate::util::SelectLoop;
 use crate::util::event::{Event, Events};
-
-#[derive(Debug, Deserialize)]
-pub struct TabSettings {
-    name: String,
-    kind: String,
-    priority: usize,
-    media_dirs: Option<Vec<String>>,
-    media_types: Option<Vec<String>>,
-    subs_dirs: Option<Vec<String>>,
-    subs_types: Option<Vec<String>>,
-}
 
 pub struct Tab {
     settings: TabSettings,
@@ -49,40 +39,7 @@ struct App {
     tabs: SelectLoop<Tab>,
 }
 
-struct SelectLoop<T> {
-    items: Vec<T>,
-    selected: usize,
-}
-
-impl<T> SelectLoop<T> {
-    pub fn next(&mut self) {
-        if self.selected < self.items.len() - 1 {
-            self.selected += 1;
-        } else {
-            self.selected = 0;
-        }
-    }
-
-    pub fn previous(&mut self) {
-        if self.selected > 0 {
-            self.selected -= 1;
-        } else {
-            self.selected = self.items.len() - 1;
-        }
-    }
-
-    pub fn get(&self) {
-        self.items[self.selected]
-    }
-}
-
 fn main() -> Result<(), failure::Error> {
-    let mut settings = Config::default();
-    settings
-        .merge(File::with_name("conf/simon.config.toml")).unwrap();
-
-    let settings = settings.try_into::<HashMap<String, TabSettings>>().unwrap();
-
     let mut app = build_app(settings);
 
     let stdout = io::stdout().into_raw_mode()?;
