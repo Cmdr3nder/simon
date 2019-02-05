@@ -1,10 +1,19 @@
-#[allow(dead_code)]
+#![feature(try_from)]
+
+extern crate config;
+
+#[macro_use]
+extern crate serde_derive;
+
 mod util;
 
 use std::io;
+use std::collections::HashMap;
+use std::convert::TryFrom;
 use std::fs::{self, DirEntry};
 use std::path::{Path, PathBuf};
 
+use config::{Config, File};
 use termion::event::Key;
 use termion::input::MouseTerminal;
 use termion::raw::IntoRawMode;
@@ -18,22 +27,64 @@ use tui::widgets::{
 use tui::{Frame, Terminal};
 
 use crate::util::event::{Event, Events};
-use crate::util::TabsState;
 
-struct MediaItem<'a> {
-    name: &'a str,
-    path: &'a str,
+#[derive(Debug, Deserialize)]
+pub struct TabSettings {
+    name: String,
+    kind: String,
+    priority: usize,
+    media_dirs: Option<Vec<String>>,
+    media_types: Option<Vec<String>>,
+    subs_dirs: Option<Vec<String>>,
+    subs_types: Option<Vec<String>>,
 }
 
-struct App<'a> {
-    tabs: TabsState<'a>,
-    video: Vec<MediaItem<'a>>,
-    selected_video: usize,
-    audio: Vec<MediaItem<'a>>,
-    selected_audio: usize,
+pub struct Tab {
+    settings: TabSettings,
+    media: Option<SelectLoop<PathBuf>>,
+    subs: Option<SelectLoop<PathBuf>>,
+}
+
+struct App {
+    tabs: SelectLoop<Tab>,
+}
+
+struct SelectLoop<T> {
+    items: Vec<T>,
+    selected: usize,
+}
+
+impl<T> SelectLoop<T> {
+    pub fn next(&mut self) {
+        if self.selected < self.items.len() - 1 {
+            self.selected += 1;
+        } else {
+            self.selected = 0;
+        }
+    }
+
+    pub fn previous(&mut self) {
+        if self.selected > 0 {
+            self.selected -= 1;
+        } else {
+            self.selected = self.items.len() - 1;
+        }
+    }
+
+    pub fn get(&self) {
+        self.items[self.selected]
+    }
 }
 
 fn main() -> Result<(), failure::Error> {
+    let mut settings = Config::default();
+    settings
+        .merge(File::with_name("conf/simon.config.toml")).unwrap();
+
+    let settings = settings.try_into::<HashMap<String, TabSettings>>().unwrap();
+
+    let mut app = build_app(settings);
+
     let stdout = io::stdout().into_raw_mode()?;
     let stdout = MouseTerminal::from(stdout);
     let stdout = AlternateScreen::from(stdout);
@@ -45,7 +96,7 @@ fn main() -> Result<(), failure::Error> {
 
     let events = Events::new();
 
-    let video_path = Path::new("/mnt/Data/Videos");
+    /*let video_path = Path::new("/mnt/Data/Videos");
     let video = find_files(&video_path, &|entry| {
         match entry.path().extension() {
             Some(ext) => match ext.to_str().unwrap() {
@@ -60,41 +111,22 @@ fn main() -> Result<(), failure::Error> {
     let video: Vec<MediaItem> = video.iter().map(|path| MediaItem {
         name: path.file_name().unwrap().to_str().unwrap(),
         path: path.to_str().unwrap(),
-    }).collect();
-
-    let mut app = App {
-        tabs: TabsState::new(vec!["Video", "Audio"]),
-        video,
-        selected_video: 0,
-        audio: vec![
-            MediaItem {
-                name: "TwentySided_035",
-                path: "/home/andrew/media/audio/TwentySided_035.ogg"
-            },
-            MediaItem {
-                name: "Lords_Of_The_Ring",
-                path: "/home/andrew/media/audio/Lords_Of_The_Ring.ogg"
-            },
-            MediaItem {
-                name: "Ten_Thousand",
-                path: "/home/andrew/media/audio/Ten_Thousand_Fists.ogg"
-            },
-        ],
-        selected_audio: 0,
-    };
+    }).collect();*/
 
     loop {
         // Draw UI
         terminal.draw(|mut f| {
+            let tab_titles: Vec<&str> = app.tabs.items.iter().map(|tab| tab.settings.name.as_str()).collect();
+
             let chunks = Layout::default()
-                .constraints([Constraint::Length(3), Constraint::Min(0)].as_ref())
+                .constraints([Constraint::Length(u16::try_from(tab_titles.len()).unwrap()), Constraint::Min(0)].as_ref())
                 .split(size);
             Tabs::default()
                 .block(Block::default().borders(Borders::ALL).title("Simon"))
-                .titles(&app.tabs.titles)
+                .titles(&tab_titles)
                 .style(Style::default().fg(Color::Green))
                 .highlight_style(Style::default().fg(Color::Yellow))
-                .select(app.tabs.index)
+                .select(app.tabs.selected)
                 .render(&mut f, chunks[0]);
             draw_media_page(&mut f, &app, chunks[1]);
         })?;
@@ -108,18 +140,8 @@ fn main() -> Result<(), failure::Error> {
                     break;
                 }
                 Key::Up => {
-                    match app.tabs.index {
-                        0 => app.selected_video = decrement_wrap(app.selected_video, app.video.len()),
-                        1 => app.selected_audio = decrement_wrap(app.selected_audio, app.audio.len()),
-                        _ => {}
-                    };
                 }
                 Key::Down => {
-                    match app.tabs.index {
-                        0 => app.selected_video = increment_wrap(app.selected_video, app.video.len()),
-                        1 => app.selected_audio = increment_wrap(app.selected_audio, app.audio.len()),
-                        _ => {}
-                    };
                 }
                 Key::Left => {
                     app.tabs.previous();
@@ -134,6 +156,15 @@ fn main() -> Result<(), failure::Error> {
         }
     }
     Ok(())
+}
+
+fn build_app(settings: HashMap<String, TabSettings>) -> App {
+    App {
+        tabs: SelectLoop {
+            items: vec![],
+            selected: 0,
+        }
+    }
 }
 
 fn visit_files<F>(dir: &Path, cb: &mut F) -> io::Result<()>
@@ -185,15 +216,11 @@ fn decrement_wrap(current: usize, length: usize) -> usize {
     current - 1
 }
 
-fn draw_media_page<B>(f: &mut Frame<B>, app: &App, area: Rect)
+fn draw_media_page<B>(f: &mut Frame<B>, tab: &Tab, area: Rect)
 where
     B: Backend,
 {
-    let names: Vec<&str> = match app.tabs.index {
-        0 => app.video.iter().map(|x| x.name).collect(),
-        1 => app.audio.iter().map(|x| x.name).collect(),
-        _ => vec![],
-    };
+    let names: Vec<&str> = tab.media.items.iter();
 
     let selected = match app.tabs.index {
         0 => Some(app.selected_video),
