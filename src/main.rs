@@ -40,7 +40,7 @@ struct Tab<'a> {
 }
 
 struct MediaTab {
-    media: Option<SelectLoop<PathBuf>>,
+    media: SelectLoop<PathBuf>,
     subs: Option<SelectLoop<PathBuf>>,
 }
 
@@ -83,7 +83,7 @@ fn main() -> Result<(), failure::Error> {
     loop {
         // Draw UI
         terminal.draw(|mut f| {
-            let tab_titles: Vec<&str> = app.tabs.items.iter().map(|tab| tab.settings.name.as_str()).collect();
+            let tab_titles: Vec<&str> = app.tabs.items.iter().map(|tab| tab.name).collect();
 
             let chunks = Layout::default()
                 .constraints([Constraint::Length(u16::try_from(tab_titles.len()).unwrap()), Constraint::Min(0)].as_ref())
@@ -93,9 +93,13 @@ fn main() -> Result<(), failure::Error> {
                 .titles(&tab_titles)
                 .style(Style::default().fg(Color::Green))
                 .highlight_style(Style::default().fg(Color::Yellow))
-                .select(app.tabs.selected)
+                .select(app.tabs.index)
                 .render(&mut f, chunks[0]);
-            draw_media_page(&mut f, &app, chunks[1]);
+
+            match &app.tabs.current().tab_type {
+                TabType::Media(media_tab) => draw_media_page(&mut f, &app.tabs.current(), &media_tab, chunks[1]),
+                _ => {}
+            };
         })?;
 
         match events.next()? {
@@ -129,7 +133,7 @@ fn build_app<'a>(settings: Vec<&TabSettings>) -> App<'a> {
     App {
         tabs: SelectLoop {
             items: vec![],
-            selected: 0,
+            index: 0,
         }
     }
 }
@@ -183,28 +187,23 @@ fn decrement_wrap(current: usize, length: usize) -> usize {
     current - 1
 }
 
-fn draw_media_page<B>(f: &mut Frame<B>, tab: &Tab, area: Rect)
+fn draw_media_page<B>(f: &mut Frame<B>, tab: &Tab, media_tab: &MediaTab, area: Rect)
 where
     B: Backend,
 {
-    let names: Vec<&str> = tab.media.items.iter();
+    let media_names: Vec<&str> = media_tab.media.items.iter().map(|path_buf| path_buf.to_str().unwrap()).collect();
 
-    let selected = match app.tabs.index {
-        0 => Some(app.selected_video),
-        1 => Some(app.selected_audio),
-        _ => None,
-    };
-
-    let title = match app.tabs.index {
-        0 => "Video Files",
-        1 => "Audio Files",
-        _ => "Unknown",
+    match &media_tab.subs {
+        Some(subs) => {
+            let subs_names: Vec<&str> = subs.items.iter().map(|path_buf| path_buf.to_str().unwrap()).collect();
+        },
+        None => {},
     };
 
     SelectableList::default()
-        .block(Block::default().borders(Borders::ALL).title(title))
-        .items(&names)
-        .select(selected)
+        .block(Block::default().borders(Borders::ALL).title(tab.name))
+        .items(&media_names)
+        .select(Some(media_tab.media.index))
         .highlight_style(Style::default().fg(Color::Yellow).modifier(Modifier::Bold))
         .highlight_symbol(">")
         .render(f, area);

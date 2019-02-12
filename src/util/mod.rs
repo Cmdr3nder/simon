@@ -17,11 +17,11 @@ impl<T> SelectLoop<T> {
     pub fn previous(&mut self) {
         self.index = match self.index > 0 {
             true => self.index - 1,
-            false => self.titles.len() - 1,
+            false => self.items.len() - 1,
         }
     }
 
-    pub fn current(&self) -> T {
-        self.items[self.index]
+    pub fn current(&self) -> &T {
+        &self.items[self.index]
     }
 }
