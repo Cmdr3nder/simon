@@ -1,5 +1,6 @@
 pub mod event;
 
+#[derive(Debug)]
 pub struct SelectLoop<T> {
     pub items: Vec<T>,
     pub index: usize,

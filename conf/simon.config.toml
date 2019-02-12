@@ -1,0 +1,4 @@
+[good-eats]
+    name = "Good Eats"
+    kind = "media"
+    priority = 9

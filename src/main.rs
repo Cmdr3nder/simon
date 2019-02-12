@@ -21,7 +21,7 @@ use tui::backend::{Backend, TermionBackend};
 use tui::layout::{Constraint, Layout, Rect};
 use tui::style::{Color, Modifier, Style};
 use tui::widgets::{
-    Block, Borders, SelectableList, Tabs, Widget,
+    Block, Borders, Paragraph, SelectableList, Tabs, Text, Widget,
 };
 use tui::{Frame, Terminal};
 
@@ -29,23 +29,27 @@ use crate::settings::{TabSettings, settings_from_file};
 use crate::util::SelectLoop;
 use crate::util::event::{Event, Events};
 
+#[derive(Debug)]
 enum TabType {
     Media(MediaTab),
     Download
 }
 
-struct Tab<'a> {
-    name: &'a str,
+#[derive(Debug)]
+struct Tab {
+    name: String,
     tab_type: TabType,
 }
 
+#[derive(Debug)]
 struct MediaTab {
     media: SelectLoop<PathBuf>,
     subs: Option<SelectLoop<PathBuf>>,
 }
 
-struct App<'a> {
-    tabs: SelectLoop<Tab<'a>>,
+#[derive(Debug)]
+struct App {
+    tabs: SelectLoop<Tab>,
 }
 
 fn main() -> Result<(), failure::Error> {
@@ -54,7 +58,7 @@ fn main() -> Result<(), failure::Error> {
 
     let stdout = io::stdout().into_raw_mode()?;
     let stdout = MouseTerminal::from(stdout);
-    let stdout = AlternateScreen::from(stdout);
+    //let stdout = AlternateScreen::from(stdout);
     let backend = TermionBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
     let size = terminal.size()?;
@@ -83,10 +87,10 @@ fn main() -> Result<(), failure::Error> {
     loop {
         // Draw UI
         terminal.draw(|mut f| {
-            let tab_titles: Vec<&str> = app.tabs.items.iter().map(|tab| tab.name).collect();
+            let tab_titles: Vec<&str> = app.tabs.items.iter().map(|tab| tab.name.as_str()).collect();
 
             let chunks = Layout::default()
-                .constraints([Constraint::Length(u16::try_from(tab_titles.len()).unwrap()), Constraint::Min(0)].as_ref())
+                .constraints([Constraint::Length(3), Constraint::Min(0)].as_ref())
                 .split(size);
             Tabs::default()
                 .block(Block::default().borders(Borders::ALL).title("Simon"))
@@ -98,7 +102,7 @@ fn main() -> Result<(), failure::Error> {
 
             match &app.tabs.current().tab_type {
                 TabType::Media(media_tab) => draw_media_page(&mut f, &app.tabs.current(), &media_tab, chunks[1]),
-                _ => {}
+                _ => draw_blank_page(&mut f, chunks[1])
             };
         })?;
 
@@ -126,13 +130,21 @@ fn main() -> Result<(), failure::Error> {
             }
         }
     }
+
+    terminal.clear()?;
+
     Ok(())
 }
 
-fn build_app<'a>(settings: Vec<&TabSettings>) -> App<'a> {
+fn build_app(settings: Vec<TabSettings>) -> App {
     App {
         tabs: SelectLoop {
-            items: vec![],
+            items: settings.iter().map(|settings| {
+                Tab {
+                    name: settings.name.clone(),
+                    tab_type: TabType::Download
+                }
+            }).collect(),
             index: 0,
         }
     }
@@ -201,11 +213,24 @@ where
     };
 
     SelectableList::default()
-        .block(Block::default().borders(Borders::ALL).title(tab.name))
+        .block(Block::default().borders(Borders::ALL).title(&tab.name))
         .items(&media_names)
         .select(Some(media_tab.media.index))
         .highlight_style(Style::default().fg(Color::Yellow).modifier(Modifier::Bold))
         .highlight_symbol(">")
+        .render(f, area);
+}
+
+fn draw_blank_page<B>(f: &mut Frame<B>, area: Rect)
+where
+    B: Backend,
+{
+    let text = [
+        Text::raw("Wait how did you do that?\n"),
+    ];
+
+    Paragraph::new(text.iter())
+        .block(Block::default().borders(Borders::ALL))
         .render(f, area);
 }
 
