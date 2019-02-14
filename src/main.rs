@@ -34,12 +34,23 @@ enum TabType {
 
 #[derive(Debug)]
 struct Tab {
+    base_color: Color,
+    hightlight_color: Color,
     name: String,
     tab_type: TabType,
 }
 
 #[derive(Debug)]
+enum MediaCursor {
+    MediaListOut,
+    MediaListIn,
+    SubsListOut,
+    SubsListIn,
+}
+
+#[derive(Debug)]
 struct MediaTab {
+    cursor: MediaCursor,
     media: SelectLoop<PathBuf>,
     subs: Option<SelectLoop<PathBuf>>,
 }
@@ -85,18 +96,38 @@ fn main() -> Result<(), failure::Error> {
             let chunks = Layout::default()
                 .constraints([Constraint::Length(3), Constraint::Min(0)].as_ref())
                 .split(size);
+
+            let border_color = match app.cursor {
+                AppCursor::TabList => app.tabs.current().hightlight_color,
+                _ => app.tabs.current().base_color,
+            };
+
             Tabs::default()
-                .block(Block::default().borders(Borders::ALL).title("Simon"))
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .border_style(Style::default().fg(border_color))
+                        .title("Simon"),
+                )
                 .titles(&tab_titles)
-                .style(Style::default().fg(Color::Green))
-                .highlight_style(Style::default().fg(Color::Yellow))
+                .style(Style::default().fg(app.tabs.current().base_color))
+                .highlight_style(Style::default().fg(app.tabs.current().hightlight_color))
                 .select(app.tabs.index)
                 .render(&mut f, chunks[0]);
 
+            let contents_have_focus = match app.cursor {
+                AppCursor::TabContents => true,
+                _ => false,
+            };
+
             match &app.tabs.current().tab_type {
-                TabType::Media(media_tab) => {
-                    draw_media_page(&mut f, &app.tabs.current(), &media_tab, chunks[1])
-                }
+                TabType::Media(media_tab) => draw_media_page(
+                    &mut f,
+                    &app.tabs.current(),
+                    &media_tab,
+                    contents_have_focus,
+                    chunks[1],
+                ),
                 _ => draw_blank_page(&mut f, chunks[1]),
             };
         })?;
@@ -115,38 +146,50 @@ fn main() -> Result<(), failure::Error> {
 }
 
 fn handle_input(app: &mut App, event: Event<Key>) -> ProgramStatus {
-    match event {
-        Event::Input(input) => match input {
-            Key::Esc => ProgramStatus::Quit,
-            Key::Char('q') => ProgramStatus::Quit,
-            x => match handle_tab_input(app.tabs.current_mut(), x) {
-                Some(input) => match input {
-                    Key::Up => {
-                        app.cursor = match app.cursor {
-                            AppCursor::TabList => AppCursor::TabList,
-                            AppCursor::TabContents => AppCursor::TabList,
-                        };
-                        ProgramStatus::Resume
-                    }
-                    Key::Down => {
-                        app.cursor = match app.cursor {
-                            AppCursor::TabList => AppCursor::TabContents,
-                            AppCursor::TabContents => AppCursor::TabContents,
-                        };
-                        ProgramStatus::Resume
-                    }
-                    _ => ProgramStatus::Resume,
-                },
-                None => ProgramStatus::Resume,
+    match app.cursor {
+        AppCursor::TabList => match event {
+            Event::Input(input) => match input {
+                Key::Esc => ProgramStatus::Quit,
+                Key::Char('q') => ProgramStatus::Quit,
+                Key::Left => {
+                    app.tabs.previous();
+                    ProgramStatus::Resume
+                }
+                Key::Right => {
+                    app.tabs.next();
+                    ProgramStatus::Resume
+                }
+                Key::Down => {
+                    app.cursor = AppCursor::TabContents;
+                    ProgramStatus::Resume
+                }
+                _ => ProgramStatus::Resume,
             },
+            _ => ProgramStatus::Resume,
         },
-        Event::Tick => ProgramStatus::Resume,
+        AppCursor::TabContents => match event {
+            Event::Input(input) => match input {
+                Key::Esc => ProgramStatus::Quit,
+                Key::Char('q') => ProgramStatus::Quit,
+                x => match handle_tab_input(app.tabs.current_mut(), x) {
+                    Some(input) => match input {
+                        Key::Up => {
+                            app.cursor = AppCursor::TabList;
+                            ProgramStatus::Resume
+                        }
+                        _ => ProgramStatus::Resume,
+                    },
+                    None => ProgramStatus::Resume,
+                },
+            },
+            _ => ProgramStatus::Resume,
+        },
     }
 }
 
 fn handle_tab_input(tab: &mut Tab, key: Key) -> Option<Key> {
     match key {
-        Key::Up => None,
+        Key::Up => Some(key),
         _ => Some(key),
     }
 }
@@ -158,6 +201,8 @@ fn build_app(settings: Vec<TabSettings>) -> App {
             items: settings
                 .iter()
                 .map(|settings| Tab {
+                    base_color: Color::White, // TODO: Make this configurable per-tab, default to white
+                    hightlight_color: Color::Yellow, // TODO: Make this configurable per-tab, default to yellow
                     name: settings.name.clone(),
                     tab_type: match settings.kind.as_str() {
                         "media" => TabType::Media(build_media(settings)),
@@ -202,6 +247,7 @@ fn build_media(settings: &TabSettings) -> MediaTab {
     };
 
     MediaTab {
+        cursor: MediaCursor::MediaListOut,
         media: SelectLoop::new(media),
         subs: None,
     }
@@ -240,8 +286,13 @@ fn find_files(dir: &Path, filter: &Fn(&DirEntry) -> bool) -> Vec<PathBuf> {
     }
 }
 
-fn draw_media_page<B>(f: &mut Frame<B>, tab: &Tab, media_tab: &MediaTab, area: Rect)
-where
+fn draw_media_page<B>(
+    f: &mut Frame<B>,
+    tab: &Tab,
+    media_tab: &MediaTab,
+    has_focus: bool,
+    area: Rect,
+) where
     B: Backend,
 {
     let media_names: Vec<&str> = media_tab
@@ -271,20 +322,38 @@ where
                 .block(Block::default().borders(Borders::ALL).title("Subtitles"))
                 .items(&subs_names)
                 .select(Some(subs.index))
-                .highlight_style(Style::default().fg(Color::Yellow).modifier(Modifier::Bold))
+                .highlight_style(
+                    Style::default()
+                        .fg(tab.hightlight_color)
+                        .modifier(Modifier::Bold),
+                )
                 .highlight_symbol(">")
                 .render(f, chunks[1]);
         }
         None => {}
     };
 
+    let border_color = match has_focus {
+        true => tab.hightlight_color,
+        false => tab.base_color,
+    };
+
     SelectableList::default()
-        .block(Block::default().borders(Borders::ALL).title("Media"))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(border_color))
+                .title("Media"),
+        )
         .items(&media_names)
         .select(Some(media_tab.media.index))
-        .highlight_style(Style::default().fg(Color::Yellow).modifier(Modifier::Bold))
+        .highlight_style(
+            Style::default()
+                .fg(tab.hightlight_color)
+                .modifier(Modifier::Bold),
+        )
         .highlight_symbol(">")
-        .render(f, area);
+        .render(f, zone);
 }
 
 fn draw_blank_page<B>(f: &mut Frame<B>, area: Rect)
