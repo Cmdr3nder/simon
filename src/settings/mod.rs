@@ -1,6 +1,6 @@
+use config::{Config, File};
 use std::cmp::Ordering;
 use std::collections::HashMap;
-use config::{Config, File};
 
 #[derive(Clone, Debug, Deserialize, Eq)]
 pub struct TabSettings {

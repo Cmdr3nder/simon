@@ -5,11 +5,11 @@ extern crate config;
 #[macro_use]
 extern crate serde_derive;
 
-mod util;
 mod settings;
+mod util;
 
-use std::io;
 use std::fs::{self, DirEntry};
+use std::io;
 use std::path::{Path, PathBuf};
 
 use termion::event::Key;
@@ -19,19 +19,17 @@ use termion::screen::AlternateScreen;
 use tui::backend::{Backend, TermionBackend};
 use tui::layout::{Constraint, Direction, Layout, Rect};
 use tui::style::{Color, Modifier, Style};
-use tui::widgets::{
-    Block, Borders, Paragraph, SelectableList, Tabs, Text, Widget,
-};
+use tui::widgets::{Block, Borders, Paragraph, SelectableList, Tabs, Text, Widget};
 use tui::{Frame, Terminal};
 
-use crate::settings::{TabSettings, settings_from_file};
-use crate::util::SelectLoop;
+use crate::settings::{settings_from_file, TabSettings};
 use crate::util::event::{Event, Events};
+use crate::util::SelectLoop;
 
 #[derive(Debug)]
 enum TabType {
     Media(MediaTab),
-    Unknown
+    Unknown,
 }
 
 #[derive(Debug)]
@@ -81,7 +79,8 @@ fn main() -> Result<(), failure::Error> {
     loop {
         // Draw UI
         terminal.draw(|mut f| {
-            let tab_titles: Vec<&str> = app.tabs.items.iter().map(|tab| tab.name.as_str()).collect();
+            let tab_titles: Vec<&str> =
+                app.tabs.items.iter().map(|tab| tab.name.as_str()).collect();
 
             let chunks = Layout::default()
                 .constraints([Constraint::Length(3), Constraint::Min(0)].as_ref())
@@ -95,15 +94,17 @@ fn main() -> Result<(), failure::Error> {
                 .render(&mut f, chunks[0]);
 
             match &app.tabs.current().tab_type {
-                TabType::Media(media_tab) => draw_media_page(&mut f, &app.tabs.current(), &media_tab, chunks[1]),
-                _ => draw_blank_page(&mut f, chunks[1])
+                TabType::Media(media_tab) => {
+                    draw_media_page(&mut f, &app.tabs.current(), &media_tab, chunks[1])
+                }
+                _ => draw_blank_page(&mut f, chunks[1]),
             };
         })?;
 
         match handle_input(&mut app, events.next()?) {
             ProgramStatus::Quit => {
                 break;
-            },
+            }
             _ => {}
         }
     }
@@ -118,39 +119,35 @@ fn handle_input(app: &mut App, event: Event<Key>) -> ProgramStatus {
         Event::Input(input) => match input {
             Key::Esc => ProgramStatus::Quit,
             Key::Char('q') => ProgramStatus::Quit,
-            x => {
-                match handle_tab_input(app.tabs.current_mut(), x) {
-                    Some(input) => {
-                        match input {
-                            Key::Up => {
-                                app.cursor = match app.cursor {
-                                    AppCursor::TabList => AppCursor::TabList,
-                                    AppCursor::TabContents => AppCursor::TabList,
-                                };
-                                ProgramStatus::Resume
-                            }
-                            Key::Down => {
-                                app.cursor = match app.cursor {
-                                    AppCursor::TabList => AppCursor::TabContents,
-                                    AppCursor::TabContents => AppCursor::TabContents,
-                                };
-                                ProgramStatus::Resume
-                            }
-                            _ => ProgramStatus::Resume
-                        }
+            x => match handle_tab_input(app.tabs.current_mut(), x) {
+                Some(input) => match input {
+                    Key::Up => {
+                        app.cursor = match app.cursor {
+                            AppCursor::TabList => AppCursor::TabList,
+                            AppCursor::TabContents => AppCursor::TabList,
+                        };
+                        ProgramStatus::Resume
                     }
-                    None => ProgramStatus::Resume
-                }
-            }
+                    Key::Down => {
+                        app.cursor = match app.cursor {
+                            AppCursor::TabList => AppCursor::TabContents,
+                            AppCursor::TabContents => AppCursor::TabContents,
+                        };
+                        ProgramStatus::Resume
+                    }
+                    _ => ProgramStatus::Resume,
+                },
+                None => ProgramStatus::Resume,
+            },
         },
-        Event::Tick => ProgramStatus::Resume
+        Event::Tick => ProgramStatus::Resume,
     }
 }
 
 fn handle_tab_input(tab: &mut Tab, key: Key) -> Option<Key> {
     match key {
         Key::Up => None,
-        _ => Some(key)
+        _ => Some(key),
     }
 }
 
@@ -158,17 +155,18 @@ fn build_app(settings: Vec<TabSettings>) -> App {
     App {
         cursor: AppCursor::TabList,
         tabs: SelectLoop {
-            items: settings.iter().map(|settings| {
-                Tab {
+            items: settings
+                .iter()
+                .map(|settings| Tab {
                     name: settings.name.clone(),
                     tab_type: match settings.kind.as_str() {
                         "media" => TabType::Media(build_media(settings)),
                         _ => TabType::Unknown,
-                    }
-                }
-            }).collect(),
+                    },
+                })
+                .collect(),
             index: 0,
-        }
+        },
     }
 }
 
@@ -176,37 +174,42 @@ fn build_media(settings: &TabSettings) -> MediaTab {
     let mut media: Vec<PathBuf> = Vec::new();
     let media_types: &Vec<String> = match &settings.media_types {
         Some(types) => types,
-        None => panic!("Configuration error for {}, you must provide media_types for a type=\"media\" tab", settings.name)
+        None => panic!(
+            "Configuration error for {}, you must provide media_types for a type=\"media\" tab",
+            settings.name
+        ),
     };
 
     match &settings.media_dirs {
         Some(dirs) => {
             for dir in dirs {
-                let mut files = find_files(Path::new(dir), &|entry| {
-                    match entry.path().extension() {
+                let mut files =
+                    find_files(Path::new(dir), &|entry| match entry.path().extension() {
                         Some(ext) => match ext.to_str() {
                             Some(ext) => media_types.contains(&String::from(ext)),
                             None => false,
                         },
                         None => false,
-                    }
-                });
+                    });
 
                 media.append(&mut files);
             }
-        },
-        None => panic!("Configuration error for {}, you must provide media_dirs for a type=\"media\" tab", settings.name)
+        }
+        None => panic!(
+            "Configuration error for {}, you must provide media_dirs for a type=\"media\" tab",
+            settings.name
+        ),
     };
 
     MediaTab {
         media: SelectLoop::new(media),
-        subs: None
+        subs: None,
     }
 }
 
 fn visit_files<F>(dir: &Path, cb: &mut F) -> io::Result<()>
 where
-    F: FnMut(&DirEntry)
+    F: FnMut(&DirEntry),
 {
     if dir.is_dir() {
         for entry in fs::read_dir(dir)? {
@@ -233,7 +236,7 @@ fn find_files(dir: &Path, filter: &Fn(&DirEntry) -> bool) -> Vec<PathBuf> {
         }
     }) {
         Ok(_) => result,
-        Err(_) => vec![] // TODO: Log this error.
+        Err(_) => vec![], // TODO: Log this error.
     }
 }
 
@@ -241,22 +244,25 @@ fn draw_media_page<B>(f: &mut Frame<B>, tab: &Tab, media_tab: &MediaTab, area: R
 where
     B: Backend,
 {
-    let media_names: Vec<&str> = media_tab.media.items.iter().map(|path_buf| path_buf.to_str().unwrap()).collect(); // TODO: Remove unwrap and panic if we can't render
+    let media_names: Vec<&str> = media_tab
+        .media
+        .items
+        .iter()
+        .map(|path_buf| path_buf.to_str().unwrap())
+        .collect(); // TODO: Remove unwrap and panic if we can't render
     let mut zone = area;
 
     match &media_tab.subs {
         Some(subs) => {
-            let subs_names: Vec<&str> = subs.items.iter().map(|path_buf| path_buf.to_str().unwrap()).collect(); // TODO: Remove unwrap and panic if we can't render
+            let subs_names: Vec<&str> = subs
+                .items
+                .iter()
+                .map(|path_buf| path_buf.to_str().unwrap())
+                .collect(); // TODO: Remove unwrap and panic if we can't render
 
             let chunks = Layout::default()
                 .direction(Direction::Horizontal)
-                .constraints(
-                    [
-                        Constraint::Percentage(50),
-                        Constraint::Percentage(50),
-                    ]
-                    .as_ref(),
-                )
+                .constraints([Constraint::Percentage(50), Constraint::Percentage(50)].as_ref())
                 .split(area);
 
             zone = chunks[0];
@@ -268,8 +274,8 @@ where
                 .highlight_style(Style::default().fg(Color::Yellow).modifier(Modifier::Bold))
                 .highlight_symbol(">")
                 .render(f, chunks[1]);
-        },
-        None => {},
+        }
+        None => {}
     };
 
     SelectableList::default()
@@ -285,12 +291,9 @@ fn draw_blank_page<B>(f: &mut Frame<B>, area: Rect)
 where
     B: Backend,
 {
-    let text = [
-        Text::raw("Wait how did you do that?\n"),
-    ];
+    let text = [Text::raw("Wait how did you do that?\n")];
 
     Paragraph::new(text.iter())
         .block(Block::default().borders(Borders::ALL))
         .render(f, area);
 }
-
