@@ -9,7 +9,6 @@ mod util;
 mod settings;
 
 use std::io;
-use std::convert::TryFrom;
 use std::fs::{self, DirEntry};
 use std::path::{Path, PathBuf};
 
@@ -18,7 +17,7 @@ use termion::input::MouseTerminal;
 use termion::raw::IntoRawMode;
 use termion::screen::AlternateScreen;
 use tui::backend::{Backend, TermionBackend};
-use tui::layout::{Constraint, Layout, Rect};
+use tui::layout::{Constraint, Direction, Layout, Rect};
 use tui::style::{Color, Modifier, Style};
 use tui::widgets::{
     Block, Borders, Paragraph, SelectableList, Tabs, Text, Widget,
@@ -58,10 +57,10 @@ fn main() -> Result<(), failure::Error> {
 
     let stdout = io::stdout().into_raw_mode()?;
     let stdout = MouseTerminal::from(stdout);
-    //let stdout = AlternateScreen::from(stdout);
+    let stdout = AlternateScreen::from(stdout);
     let backend = TermionBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
-    let size = terminal.size()?;
+    let size: Rect = terminal.size()?;
     terminal.hide_cursor()?;
     terminal.clear()?;
 
@@ -205,17 +204,39 @@ fn draw_media_page<B>(f: &mut Frame<B>, tab: &Tab, media_tab: &MediaTab, area: R
 where
     B: Backend,
 {
-    let media_names: Vec<&str> = media_tab.media.items.iter().map(|path_buf| path_buf.to_str().unwrap()).collect();
+    let media_names: Vec<&str> = media_tab.media.items.iter().map(|path_buf| path_buf.to_str().unwrap()).collect(); // TODO: Remove unwrap and panic if we can't render
+    let mut zone = area;
 
     match &media_tab.subs {
         Some(subs) => {
-            let subs_names: Vec<&str> = subs.items.iter().map(|path_buf| path_buf.to_str().unwrap()).collect();
+            let mut subs_names: Vec<&str> = subs.items.iter().map(|path_buf| path_buf.to_str().unwrap()).collect(); // TODO: Remove unwrap and panic if we can't render
+
+            let chunks = Layout::default()
+                .direction(Direction::Horizontal)
+                .constraints(
+                    [
+                        Constraint::Percentage(50),
+                        Constraint::Percentage(50),
+                    ]
+                    .as_ref(),
+                )
+                .split(area);
+
+            zone = chunks[0];
+
+            SelectableList::default()
+                .block(Block::default().borders(Borders::ALL).title("Subtitles"))
+                .items(&subs_names)
+                .select(Some(subs.index))
+                .highlight_style(Style::default().fg(Color::Yellow).modifier(Modifier::Bold))
+                .highlight_symbol(">")
+                .render(f, chunks[1]);
         },
         None => {},
     };
 
     SelectableList::default()
-        .block(Block::default().borders(Borders::ALL).title(&tab.name))
+        .block(Block::default().borders(Borders::ALL).title("Media"))
         .items(&media_names)
         .select(Some(media_tab.media.index))
         .highlight_style(Style::default().fg(Color::Yellow).modifier(Modifier::Bold))
