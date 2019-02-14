@@ -248,7 +248,7 @@ where
         .media
         .items
         .iter()
-        .map(|path_buf| path_buf.to_str().unwrap())
+        .map(|path_buf| path_buf.file_name().unwrap().to_str().unwrap())
         .collect(); // TODO: Remove unwrap and panic if we can't render
     let mut zone = area;
 
@@ -257,7 +257,7 @@ where
             let subs_names: Vec<&str> = subs
                 .items
                 .iter()
-                .map(|path_buf| path_buf.to_str().unwrap())
+                .map(|path_buf| path_buf.file_name().unwrap().to_str().unwrap())
                 .collect(); // TODO: Remove unwrap and panic if we can't render
 
             let chunks = Layout::default()
