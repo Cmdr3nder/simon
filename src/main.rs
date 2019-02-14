@@ -32,7 +32,7 @@ use crate::util::event::{Event, Events};
 #[derive(Debug)]
 enum TabType {
     Media(MediaTab),
-    Download
+    Unknown
 }
 
 #[derive(Debug)]
@@ -66,23 +66,6 @@ fn main() -> Result<(), failure::Error> {
     terminal.clear()?;
 
     let events = Events::new();
-
-    /*let video_path = Path::new("/mnt/Data/Videos");
-    let video = find_files(&video_path, &|entry| {
-        match entry.path().extension() {
-            Some(ext) => match ext.to_str().unwrap() {
-                "mp4" => true,
-                "mkv" => true,
-                "wmv" => true,
-                _ => false
-            },
-            None => false
-        }
-    });
-    let video: Vec<MediaItem> = video.iter().map(|path| MediaItem {
-        name: path.file_name().unwrap().to_str().unwrap(),
-        path: path.to_str().unwrap(),
-    }).collect();*/
 
     loop {
         // Draw UI
@@ -142,11 +125,46 @@ fn build_app(settings: Vec<TabSettings>) -> App {
             items: settings.iter().map(|settings| {
                 Tab {
                     name: settings.name.clone(),
-                    tab_type: TabType::Download
+                    tab_type: match settings.kind.as_str() {
+                        "media" => TabType::Media(build_media(settings)),
+                        _ => TabType::Unknown,
+                    }
                 }
             }).collect(),
             index: 0,
         }
+    }
+}
+
+fn build_media(settings: &TabSettings) -> MediaTab {
+    let mut media: Vec<PathBuf> = Vec::new();
+    let media_types: &Vec<String> = match &settings.media_types {
+        Some(types) => types,
+        None => panic!("Configuration error for {}, you must provide media_types for a type=\"media\" tab", settings.name)
+    };
+
+    match &settings.media_dirs {
+        Some(dirs) => {
+            for dir in dirs {
+                let mut files = find_files(Path::new(dir), &|entry| {
+                    match entry.path().extension() {
+                        Some(ext) => match ext.to_str() {
+                            Some(ext) => media_types.contains(&String::from(ext)),
+                            None => false,
+                        },
+                        None => false,
+                    }
+                });
+
+                media.append(&mut files);
+            }
+        },
+        None => panic!("Configuration error for {}, you must provide media_dirs for a type=\"media\" tab", settings.name)
+    };
+
+    MediaTab {
+        media: SelectLoop::new(media),
+        subs: None
     }
 }
 
@@ -181,22 +199,6 @@ fn find_files(dir: &Path, filter: &Fn(&DirEntry) -> bool) -> Vec<PathBuf> {
         Ok(_) => result,
         Err(_) => vec![] // TODO: Log this error.
     }
-}
-
-fn increment_wrap(current: usize, length: usize) -> usize {
-    if current == length - 1 {
-        return 0;
-    }
-
-    current + 1
-}
-
-fn decrement_wrap(current: usize, length: usize) -> usize {
-    if current == 0 {
-        return length - 1;
-    }
-
-    current - 1
 }
 
 fn draw_media_page<B>(f: &mut Frame<B>, tab: &Tab, media_tab: &MediaTab, area: Rect)

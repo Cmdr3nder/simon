@@ -2,3 +2,5 @@
     name = "Good Eats"
     kind = "media"
     priority = 9
+    media_dirs = [ "/mnt/Data/Videos" ]
+    media_types = [ "mp4", "mkv", "avi" ]
