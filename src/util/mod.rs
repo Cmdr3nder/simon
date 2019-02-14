@@ -25,4 +25,8 @@ impl<T> SelectLoop<T> {
     pub fn current(&self) -> &T {
         &self.items[self.index]
     }
+
+    pub fn current_mut(&mut self) -> &mut T {
+        &mut self.items[self.index]
+    }
 }

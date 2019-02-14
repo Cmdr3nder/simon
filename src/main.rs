@@ -47,8 +47,20 @@ struct MediaTab {
 }
 
 #[derive(Debug)]
+enum AppCursor {
+    TabList,
+    TabContents,
+}
+
+#[derive(Debug)]
 struct App {
+    cursor: AppCursor,
     tabs: SelectLoop<Tab>,
+}
+
+enum ProgramStatus {
+    Quit,
+    Resume,
 }
 
 fn main() -> Result<(), failure::Error> {
@@ -88,28 +100,11 @@ fn main() -> Result<(), failure::Error> {
             };
         })?;
 
-        match events.next()? {
-            Event::Input(input) => match input {
-                Key::Esc => {
-                    break;
-                }
-                Key::Char('q') => {
-                    break;
-                }
-                Key::Up => {
-                }
-                Key::Down => {
-                }
-                Key::Left => {
-                    app.tabs.previous();
-                }
-                Key::Right => {
-                    app.tabs.next();
-                }
-                _ => {}
+        match handle_input(&mut app, events.next()?) {
+            ProgramStatus::Quit => {
+                break;
             },
-            Event::Tick => {
-            }
+            _ => {}
         }
     }
 
@@ -118,8 +113,50 @@ fn main() -> Result<(), failure::Error> {
     Ok(())
 }
 
+fn handle_input(app: &mut App, event: Event<Key>) -> ProgramStatus {
+    match event {
+        Event::Input(input) => match input {
+            Key::Esc => ProgramStatus::Quit,
+            Key::Char('q') => ProgramStatus::Quit,
+            x => {
+                match handle_tab_input(app.tabs.current_mut(), x) {
+                    Some(input) => {
+                        match input {
+                            Key::Up => {
+                                app.cursor = match app.cursor {
+                                    AppCursor::TabList => AppCursor::TabList,
+                                    AppCursor::TabContents => AppCursor::TabList,
+                                };
+                                ProgramStatus::Resume
+                            }
+                            Key::Down => {
+                                app.cursor = match app.cursor {
+                                    AppCursor::TabList => AppCursor::TabContents,
+                                    AppCursor::TabContents => AppCursor::TabContents,
+                                };
+                                ProgramStatus::Resume
+                            }
+                            _ => ProgramStatus::Resume
+                        }
+                    }
+                    None => ProgramStatus::Resume
+                }
+            }
+        },
+        Event::Tick => ProgramStatus::Resume
+    }
+}
+
+fn handle_tab_input(tab: &mut Tab, key: Key) -> Option<Key> {
+    match key {
+        Key::Up => None,
+        _ => Some(key)
+    }
+}
+
 fn build_app(settings: Vec<TabSettings>) -> App {
     App {
+        cursor: AppCursor::TabList,
         tabs: SelectLoop {
             items: settings.iter().map(|settings| {
                 Tab {
@@ -209,7 +246,7 @@ where
 
     match &media_tab.subs {
         Some(subs) => {
-            let mut subs_names: Vec<&str> = subs.items.iter().map(|path_buf| path_buf.to_str().unwrap()).collect(); // TODO: Remove unwrap and panic if we can't render
+            let subs_names: Vec<&str> = subs.items.iter().map(|path_buf| path_buf.to_str().unwrap()).collect(); // TODO: Remove unwrap and panic if we can't render
 
             let chunks = Layout::default()
                 .direction(Direction::Horizontal)
