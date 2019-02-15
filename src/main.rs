@@ -188,9 +188,42 @@ fn handle_input(app: &mut App, event: Event<Key>) -> ProgramStatus {
 }
 
 fn handle_tab_input(tab: &mut Tab, key: Key) -> Option<Key> {
-    match key {
-        Key::Up => Some(key),
+    match &mut tab.tab_type {
+        TabType::Media(media_tab) => handle_media_tab_input(media_tab, key),
         _ => Some(key),
+    }
+}
+
+fn handle_media_tab_input(media_tab: &mut MediaTab, key: Key) -> Option<Key> {
+    match media_tab.cursor {
+        MediaCursor::MediaListOut => {
+            match key {
+                Key::Up => Some(key),
+                Key::Char('\n') => {
+                    media_tab.cursor = MediaCursor::MediaListIn;
+                    None
+                },
+                _ => None
+            }
+        },
+        MediaCursor::MediaListIn => {
+            match key {
+                Key::Up => {
+                    media_tab.media.previous();
+                    None
+                },
+                Key::Down => {
+                    media_tab.media.next();
+                    None
+                },
+                Key::Char('\n') => {
+                    media_tab.cursor = MediaCursor::MediaListOut;
+                    None
+                },
+                _ => None
+            }
+        }
+        _ => None
     }
 }
 
@@ -338,18 +371,24 @@ fn draw_media_page<B>(
         false => tab.base_color,
     };
 
+    let highlight_color = match media_tab.cursor {
+        MediaCursor::MediaListIn => tab.hightlight_color,
+        _ => tab.base_color,
+    };
+
     SelectableList::default()
         .block(
             Block::default()
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(border_color))
+                .title_style(Style::default().fg(highlight_color))
                 .title("Media"),
         )
         .items(&media_names)
         .select(Some(media_tab.media.index))
         .highlight_style(
             Style::default()
-                .fg(tab.hightlight_color)
+                .fg(highlight_color)
                 .modifier(Modifier::Bold),
         )
         .highlight_symbol(">")
