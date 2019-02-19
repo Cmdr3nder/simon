@@ -197,34 +197,30 @@ fn handle_tab_input(tab: &mut Tab, key: Key) -> Option<Key> {
 
 fn handle_media_tab_input(media_tab: &mut MediaTab, key: Key) -> Option<Key> {
     match media_tab.cursor {
-        MediaCursor::MediaListOut => {
-            match key {
-                Key::Up => Some(key),
-                Key::Char('\n') => {
-                    media_tab.cursor = MediaCursor::MediaListIn;
-                    None
-                },
-                _ => None
+        MediaCursor::MediaListOut => match key {
+            Key::Up => Some(key),
+            Key::Char('\n') => {
+                media_tab.cursor = MediaCursor::MediaListIn;
+                None
             }
+            _ => None,
         },
-        MediaCursor::MediaListIn => {
-            match key {
-                Key::Up => {
-                    media_tab.media.previous();
-                    None
-                },
-                Key::Down => {
-                    media_tab.media.next();
-                    None
-                },
-                Key::Char('\n') => {
-                    media_tab.cursor = MediaCursor::MediaListOut;
-                    None
-                },
-                _ => None
+        MediaCursor::MediaListIn => match key {
+            Key::Up => {
+                media_tab.media.previous();
+                None
             }
-        }
-        _ => None
+            Key::Down => {
+                media_tab.media.next();
+                None
+            }
+            Key::Char('\n') => {
+                media_tab.cursor = MediaCursor::MediaListOut;
+                None
+            }
+            _ => None,
+        },
+        _ => None,
     }
 }
 
@@ -368,10 +364,7 @@ fn draw_media_page<B>(
                 .block(Block::default().borders(Borders::ALL).title("Subtitles"))
                 .items(&subs_names)
                 .select(Some(subs.index))
-                .style(
-                    Style::default()
-                        .fg(tab.base_color),
-                )
+                .style(Style::default().fg(tab.base_color))
                 .highlight_style(
                     Style::default()
                         .fg(tab.hightlight_color)
@@ -403,10 +396,7 @@ fn draw_media_page<B>(
         )
         .items(&media_names)
         .select(Some(media_tab.media.index))
-        .style(
-            Style::default()
-                .fg(tab.base_color),
-        )
+        .style(Style::default().fg(tab.base_color))
         .highlight_style(
             Style::default()
                 .fg(highlight_color)

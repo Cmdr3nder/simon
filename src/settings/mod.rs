@@ -39,6 +39,12 @@ pub enum ColorSetting {
     Rgb(u8, u8, u8),
 }
 
+#[derive(Deserialize)]
+pub struct CommandSetting {
+    program: String,
+    args: Vec<String>,
+}
+
 impl Into<Color> for ColorSetting {
     fn into(self) -> Color {
         match self {
