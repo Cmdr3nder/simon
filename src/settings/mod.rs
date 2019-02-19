@@ -13,6 +13,7 @@ pub struct TabSettings {
     pub media_types: Option<Vec<String>>,
     pub subs_dirs: Option<Vec<String>>,
     pub subs_types: Option<Vec<String>>,
+    pub command: Option<CommandSetting>,
     pub base_color: Option<ColorSetting>,
     pub highlight_color: Option<ColorSetting>,
 }
@@ -39,10 +40,10 @@ pub enum ColorSetting {
     Rgb(u8, u8, u8),
 }
 
-#[derive(Deserialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct CommandSetting {
-    program: String,
-    args: Vec<String>,
+    pub program: String,
+    pub args: Vec<String>,
 }
 
 impl Into<Color> for ColorSetting {

@@ -1,5 +1,3 @@
-#![feature(try_from)]
-
 extern crate config;
 
 #[macro_use]
@@ -11,6 +9,7 @@ mod util;
 use std::fs::{self, DirEntry};
 use std::io;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
 use termion::event::Key;
 use termion::input::MouseTerminal;
@@ -22,7 +21,7 @@ use tui::style::{Color, Modifier, Style};
 use tui::widgets::{Block, Borders, Paragraph, SelectableList, Tabs, Text, Widget};
 use tui::{Frame, Terminal};
 
-use crate::settings::{settings_from_file, TabSettings};
+use crate::settings::{settings_from_file, CommandSetting, TabSettings};
 use crate::util::event::{Event, Events};
 use crate::util::SelectLoop;
 
@@ -50,6 +49,7 @@ enum MediaCursor {
 
 #[derive(Debug)]
 struct MediaTab {
+    command: CommandSetting,
     cursor: MediaCursor,
     media: SelectLoop<PathBuf>,
     subs: Option<SelectLoop<PathBuf>>,
@@ -70,6 +70,7 @@ struct App {
 enum ProgramStatus {
     Quit,
     Resume,
+    Refresh,
 }
 
 fn main() -> Result<(), failure::Error> {
@@ -81,13 +82,20 @@ fn main() -> Result<(), failure::Error> {
     let stdout = AlternateScreen::from(stdout);
     let backend = TermionBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
-    let size: Rect = terminal.size()?;
+    let mut size: Rect = terminal.size()?;
     terminal.hide_cursor()?;
     terminal.clear()?;
 
     let events = Events::new();
 
     loop {
+        let new_size = terminal.size()?;
+
+        if new_size != size {
+            terminal.resize(new_size)?;
+            size = new_size;
+        }
+
         // Draw UI
         terminal.draw(|mut f| {
             let tab_titles: Vec<&str> =
@@ -137,6 +145,10 @@ fn main() -> Result<(), failure::Error> {
             ProgramStatus::Quit => {
                 break;
             }
+            ProgramStatus::Refresh => {
+                terminal.resize(terminal.size()?)?;
+                terminal.flush()?;
+            }
             _ => {}
         }
     }
@@ -178,6 +190,7 @@ fn handle_input(app: &mut App, event: Event<Key>) -> ProgramStatus {
                             app.cursor = AppCursor::TabList;
                             ProgramStatus::Resume
                         }
+                        Key::Char('r') => ProgramStatus::Refresh,
                         _ => ProgramStatus::Resume,
                     },
                     None => ProgramStatus::Resume,
@@ -203,6 +216,7 @@ fn handle_media_tab_input(media_tab: &mut MediaTab, key: Key) -> Option<Key> {
                 media_tab.cursor = MediaCursor::MediaListIn;
                 None
             }
+            Key::Char('p') => play_media(media_tab),
             _ => None,
         },
         MediaCursor::MediaListIn => match key {
@@ -214,6 +228,7 @@ fn handle_media_tab_input(media_tab: &mut MediaTab, key: Key) -> Option<Key> {
                 media_tab.media.next();
                 None
             }
+            Key::Char('p') => play_media(media_tab),
             Key::Char('\n') => {
                 media_tab.cursor = MediaCursor::MediaListOut;
                 None
@@ -222,6 +237,28 @@ fn handle_media_tab_input(media_tab: &mut MediaTab, key: Key) -> Option<Key> {
         },
         _ => None,
     }
+}
+
+fn play_media(media_tab: &MediaTab) -> Option<Key> {
+    let args: Vec<&str> = media_tab
+        .command
+        .args
+        .iter()
+        .map(|arg| match arg.as_str() {
+            "{0}" => media_tab
+                .media
+                .current()
+                .to_str()
+                .expect("Path to media should be valid UTF-8"),
+            s => s,
+        })
+        .collect();
+
+    let output = Command::new(media_tab.command.program.as_str())
+        .args(&args)
+        .output();
+
+    Some(Key::Char('r'))
 }
 
 fn build_app(settings: Vec<TabSettings>) -> App {
@@ -243,7 +280,7 @@ fn build_app(settings: Vec<TabSettings>) -> App {
 
                     Tab {
                         base_color,
-                        hightlight_color: Color::Yellow, // TODO: Make this configurable per-tab, default to yellow
+                        hightlight_color,
                         name: settings.name.clone(),
                         tab_type: match settings.kind.as_str() {
                             "media" => TabType::Media(build_media(settings)),
@@ -288,7 +325,16 @@ fn build_media(settings: &TabSettings) -> MediaTab {
         ),
     };
 
+    let command = match &settings.command {
+        Some(command) => command.clone(),
+        None => panic!(
+            "Configuration error for {}, you must provide command for a type=\"media\" tab",
+            settings.name
+        ),
+    };
+
     MediaTab {
+        command,
         cursor: MediaCursor::MediaListOut,
         media: SelectLoop::new(media),
         subs: None,
