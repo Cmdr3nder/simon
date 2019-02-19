@@ -107,6 +107,7 @@ fn main() -> Result<(), failure::Error> {
                     Block::default()
                         .borders(Borders::ALL)
                         .border_style(Style::default().fg(border_color))
+                        .title_style(Style::default().fg(border_color))
                         .title("Simon"),
                 )
                 .titles(&tab_titles)
@@ -233,14 +234,26 @@ fn build_app(settings: Vec<TabSettings>) -> App {
         tabs: SelectLoop {
             items: settings
                 .iter()
-                .map(|settings| Tab {
-                    base_color: Color::White, // TODO: Make this configurable per-tab, default to white
-                    hightlight_color: Color::Yellow, // TODO: Make this configurable per-tab, default to yellow
-                    name: settings.name.clone(),
-                    tab_type: match settings.kind.as_str() {
-                        "media" => TabType::Media(build_media(settings)),
-                        _ => TabType::Unknown,
-                    },
+                .map(|settings| {
+                    let base_color = match settings.base_color {
+                        Some(color) => color.into(),
+                        None => Color::White,
+                    };
+
+                    let hightlight_color = match settings.highlight_color {
+                        Some(color) => color.into(),
+                        None => Color::Yellow,
+                    };
+
+                    Tab {
+                        base_color,
+                        hightlight_color: Color::Yellow, // TODO: Make this configurable per-tab, default to yellow
+                        name: settings.name.clone(),
+                        tab_type: match settings.kind.as_str() {
+                            "media" => TabType::Media(build_media(settings)),
+                            _ => TabType::Unknown,
+                        },
+                    }
                 })
                 .collect(),
             index: 0,
@@ -355,6 +368,10 @@ fn draw_media_page<B>(
                 .block(Block::default().borders(Borders::ALL).title("Subtitles"))
                 .items(&subs_names)
                 .select(Some(subs.index))
+                .style(
+                    Style::default()
+                        .fg(tab.base_color),
+                )
                 .highlight_style(
                     Style::default()
                         .fg(tab.hightlight_color)
@@ -386,6 +403,10 @@ fn draw_media_page<B>(
         )
         .items(&media_names)
         .select(Some(media_tab.media.index))
+        .style(
+            Style::default()
+                .fg(tab.base_color),
+        )
         .highlight_style(
             Style::default()
                 .fg(highlight_color)
