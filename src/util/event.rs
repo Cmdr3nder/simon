@@ -56,7 +56,7 @@ impl Events {
                     let key = keys.next();
 
                     match key {
-                        Some(evt) =>  match evt {
+                        Some(evt) => match evt {
                             Ok(key) => {
                                 if let Err(_) = tx.send(Event::Input(key)) {
                                     return;
@@ -101,12 +101,18 @@ impl Events {
 
     pub fn stop(self) {
         match self.input_ctrl_tx.send(true) {
-            Ok(_) => self.input_handle.join().expect("Couldn't join on input_handle thread"),
+            Ok(_) => self
+                .input_handle
+                .join()
+                .expect("Couldn't join on input_handle thread"),
             Err(_) => panic!("Couldn't stop the input_handle thread"),
         }
 
         match self.tick_ctrl_tx.send(true) {
-            Ok(_) => self.tick_handle.join().expect("Couldn't join on tick_handle thread"),
+            Ok(_) => self
+                .tick_handle
+                .join()
+                .expect("Couldn't join on tick_handle thread"),
             Err(_) => panic!("Couldn't stop the tick_handle thread"),
         }
     }
