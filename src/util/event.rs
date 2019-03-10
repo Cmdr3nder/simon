@@ -16,7 +16,9 @@ pub enum Event<I> {
 pub struct Events {
     rx: mpsc::Receiver<Event<Key>>,
     input_handle: thread::JoinHandle<()>,
+    input_ctrl_tx: mpsc::Sender<bool>,
     tick_handle: thread::JoinHandle<()>,
+    tick_ctrl_tx: mpsc::Sender<bool>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -41,21 +43,31 @@ impl Events {
 
     pub fn with_config(config: Config) -> Events {
         let (tx, rx) = mpsc::channel();
+        let (input_ctrl_tx, input_ctrl_rx) = mpsc::channel();
+        let (tick_ctrl_tx, tick_ctrl_rx) = mpsc::channel();
+
         let input_handle = {
             let tx = tx.clone();
             thread::spawn(move || {
                 let stdin = io::stdin();
-                for evt in stdin.keys() {
-                    match evt {
-                        Ok(key) => {
-                            if let Err(_) = tx.send(Event::Input(key)) {
-                                return;
+                let mut keys = stdin.keys();
+
+                while input_ctrl_rx.try_recv().is_err() {
+                    let key = keys.next();
+
+                    match key {
+                        Some(evt) =>  match evt {
+                            Ok(key) => {
+                                if let Err(_) = tx.send(Event::Input(key)) {
+                                    return;
+                                }
+                                if key == config.exit_key {
+                                    return;
+                                }
                             }
-                            if key == config.exit_key {
-                                return;
-                            }
-                        }
-                        Err(_) => {}
+                            Err(_) => {}
+                        },
+                        None => {}
                     }
                 }
             })
@@ -65,19 +77,32 @@ impl Events {
             thread::spawn(move || {
                 let tx = tx.clone();
                 loop {
-                    tx.send(Event::Tick).unwrap();
-                    thread::sleep(config.tick_rate);
+                    if tick_ctrl_rx.try_recv().is_err() {
+                        tx.send(Event::Tick).unwrap();
+                        thread::sleep(config.tick_rate);
+                    } else {
+                        return;
+                    }
                 }
             })
         };
         Events {
             rx,
             input_handle,
+            input_ctrl_tx,
             tick_handle,
+            tick_ctrl_tx,
         }
     }
 
     pub fn next(&self) -> Result<Event<Key>, mpsc::RecvError> {
         self.rx.recv()
+    }
+
+    pub fn stop(self) {
+        self.input_ctrl_tx.send(true);
+        self.input_handle.join().expect("Couldn't join on input_handle thread");
+        self.tick_ctrl_tx.send(true);
+        self.tick_handle.join().expect("Couldn't join on tick_handle thread");
     }
 }

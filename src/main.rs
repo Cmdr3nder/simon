@@ -78,7 +78,7 @@ fn main() -> Result<(), failure::Error> {
     let mut app = build_app(settings);
 
     let stdout = io::stdout().into_raw_mode()?;
-    let stdout = MouseTerminal::from(stdout);
+    //let stdout = MouseTerminal::from(stdout);
     let stdout = AlternateScreen::from(stdout);
     let backend = TermionBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
@@ -86,7 +86,7 @@ fn main() -> Result<(), failure::Error> {
     terminal.hide_cursor()?;
     terminal.clear()?;
 
-    let events = Events::new();
+    let mut events = Events::new();
 
     loop {
         let new_size = terminal.size()?;
@@ -146,6 +146,8 @@ fn main() -> Result<(), failure::Error> {
                 break;
             }
             ProgramStatus::Refresh => {
+                events.stop();
+                events = Events::new();
                 terminal.resize(terminal.size()?)?;
                 terminal.flush()?;
             }
@@ -256,7 +258,10 @@ fn play_media(media_tab: &MediaTab) -> Option<Key> {
 
     let output = Command::new(media_tab.command.program.as_str())
         .args(&args)
-        .output();
+        .spawn()
+        .expect("Spawn media process correctly")
+        .wait()
+        .expect("Should wait on media process correctly");
 
     Some(Key::Char('r'))
 }
