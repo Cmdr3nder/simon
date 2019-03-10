@@ -12,9 +12,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use termion::event::Key;
-use termion::input::MouseTerminal;
 use termion::raw::IntoRawMode;
-use termion::screen::AlternateScreen;
 use tui::backend::{Backend, TermionBackend};
 use tui::layout::{Constraint, Direction, Layout, Rect};
 use tui::style::{Color, Modifier, Style};
@@ -78,8 +76,6 @@ fn main() -> Result<(), failure::Error> {
     let mut app = build_app(settings);
 
     let stdout = io::stdout().into_raw_mode()?;
-    //let stdout = MouseTerminal::from(stdout);
-    let stdout = AlternateScreen::from(stdout);
     let backend = TermionBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
     let mut size: Rect = terminal.size()?;
@@ -256,7 +252,7 @@ fn play_media(media_tab: &MediaTab) -> Option<Key> {
         })
         .collect();
 
-    let output = Command::new(media_tab.command.program.as_str())
+    Command::new(media_tab.command.program.as_str())
         .args(&args)
         .spawn()
         .expect("Spawn media process correctly")

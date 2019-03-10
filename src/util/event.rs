@@ -100,9 +100,14 @@ impl Events {
     }
 
     pub fn stop(self) {
-        self.input_ctrl_tx.send(true);
-        self.input_handle.join().expect("Couldn't join on input_handle thread");
-        self.tick_ctrl_tx.send(true);
-        self.tick_handle.join().expect("Couldn't join on tick_handle thread");
+        match self.input_ctrl_tx.send(true) {
+            Ok(_) => self.input_handle.join().expect("Couldn't join on input_handle thread"),
+            Err(_) => panic!("Couldn't stop the input_handle thread"),
+        }
+
+        match self.tick_ctrl_tx.send(true) {
+            Ok(_) => self.tick_handle.join().expect("Couldn't join on tick_handle thread"),
+            Err(_) => panic!("Couldn't stop the tick_handle thread"),
+        }
     }
 }
