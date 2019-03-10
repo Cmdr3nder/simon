@@ -105,7 +105,7 @@ impl Events {
                 .input_handle
                 .join()
                 .expect("Couldn't join on input_handle thread"),
-            Err(_) => panic!("Couldn't stop the input_handle thread"),
+            Err(_) => {}, //panic!("Couldn't stop the input_handle thread → {:?}", err),
         }
 
         match self.tick_ctrl_tx.send(true) {
@@ -113,7 +113,7 @@ impl Events {
                 .tick_handle
                 .join()
                 .expect("Couldn't join on tick_handle thread"),
-            Err(_) => panic!("Couldn't stop the tick_handle thread"),
+            Err(_) => {}, //panic!("Couldn't stop the tick_handle thread → {:?}", err),
         }
     }
 }
