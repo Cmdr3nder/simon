@@ -1,7 +1,5 @@
 extern crate config;
-
-#[macro_use]
-extern crate serde_derive;
+extern crate directories;
 
 mod settings;
 mod util;
@@ -19,7 +17,7 @@ use tui::style::{Color, Modifier, Style};
 use tui::widgets::{Block, Borders, Paragraph, SelectableList, Tabs, Text, Widget};
 use tui::{Frame, Terminal};
 
-use crate::settings::{settings_from_file, CommandSetting, TabSettings};
+use crate::settings::{CommandSetting, TabSettings};
 use crate::util::event::{Event, Events};
 use crate::util::SelectLoop;
 
@@ -72,7 +70,8 @@ enum ProgramStatus {
 }
 
 fn main() -> Result<(), failure::Error> {
-    let settings = settings_from_file("conf/simon.config.toml");
+    let settings = settings::get_settings()
+        .expect("This is a missing feature, need to replace panic with proper error printing.");
     let mut app = build_app(settings);
 
     let stdout = io::stdout().into_raw_mode()?;

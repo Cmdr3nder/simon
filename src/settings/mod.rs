@@ -1,8 +1,18 @@
-use config::{Config, File};
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::convert::Into;
+use std::path::Path;
+
+use directories::ProjectDirs;
+use serde::Deserialize;
 use tui::style::Color;
+
+#[derive(Debug)]
+pub enum Error {
+    Find,
+    Read(config::ConfigError),
+    Content(config::ConfigError),
+}
 
 #[derive(Clone, Debug, Deserialize, Eq)]
 pub struct TabSettings {
@@ -89,13 +99,37 @@ impl PartialEq for TabSettings {
     }
 }
 
-pub fn settings_from_file(settings_file: &str) -> Vec<TabSettings> {
-    let mut settings = Config::default();
-    settings.merge(File::with_name(settings_file)).unwrap();
-    let settings = settings.try_into::<HashMap<String, TabSettings>>().unwrap();
+pub fn get_settings() -> Result<Vec<TabSettings>, Error> {
+    match ProjectDirs::from("com", "agamecoder", "simon") {
+        Some(dirs) => {
+            let mut config = dirs.config_dir().to_path_buf();
+            config.push("simon.config.toml");
 
-    let mut settings: Vec<TabSettings> = settings.values().map(|r| r.clone()).collect();
+            if config.exists() {
+                read_config(config.as_path())
+            } else {
+                Err(Error::Find)
+            }
+        }
+        None => Err(Error::Find),
+    }
+}
+
+fn read_underlying_config(file: &Path) -> Result<HashMap<String, TabSettings>, Error> {
+    let mut settings = config::Config::default();
+    match settings.merge(config::File::from(file)) {
+        Ok(_) => settings
+            .try_into::<HashMap<String, TabSettings>>()
+            .map_err(|err| Error::Content(err)),
+        Err(err) => Err(Error::Read(err)),
+    }
+}
+
+fn read_config(file: &Path) -> Result<Vec<TabSettings>, Error> {
+    let config = read_underlying_config(file)?;
+
+    let mut settings: Vec<TabSettings> = config.values().map(|r| r.clone()).collect();
     settings.sort();
 
-    settings
+    Ok(settings)
 }
