@@ -70,8 +70,11 @@ enum ProgramStatus {
 }
 
 fn main() -> Result<(), failure::Error> {
-    let settings = settings::get_settings()
-        .expect("This is a missing feature, need to replace panic with proper error printing.");
+    let settings = match settings::get_settings() {
+        Ok(s) => s,
+        Err(err) => panic!(format!("Could not read settings → {:?}", err)),
+    };
+
     let mut app = build_app(settings);
 
     let stdout = io::stdout().into_raw_mode()?;
