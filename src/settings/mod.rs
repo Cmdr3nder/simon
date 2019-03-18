@@ -83,7 +83,10 @@ impl Into<Color> for ColorSetting {
 
 impl Ord for TabSettings {
     fn cmp(&self, other: &TabSettings) -> Ordering {
-        self.priority.cmp(&other.priority)
+        match self.priority.cmp(&other.priority) {
+            Ordering::Equal => self.name.cmp(&other.name),
+            x => x,
+        }
     }
 }
 
