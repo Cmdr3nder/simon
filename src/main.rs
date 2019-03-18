@@ -319,7 +319,7 @@ fn build_media(settings: &TabSettings) -> MediaTab {
                         None => false,
                     });
 
-                files.sort_by_key(|file| String::from(file.file_name().unwrap().to_str().unwrap()));
+                files.sort_by_key(|file| String::from(file.file_name().unwrap().to_str().unwrap().to_uppercase()));
 
                 media.append(&mut files);
             }
