@@ -39,8 +39,6 @@ struct Tab {
 enum MediaCursor {
     MediaListOut,
     MediaListIn,
-    SubsListOut,
-    SubsListIn,
 }
 
 #[derive(Debug)]
@@ -66,6 +64,12 @@ struct App {
 enum ProgramStatus {
     Quit,
     Resume,
+    Refresh,
+}
+
+enum InputResult {
+    GoToTabList,
+    Key(Key),
     Refresh,
 }
 
@@ -159,65 +163,70 @@ fn main() -> Result<(), failure::Error> {
 }
 
 fn handle_input(app: &mut App, event: Event<Key>) -> ProgramStatus {
-    match app.cursor {
-        AppCursor::TabList => match event {
-            Event::Input(input) => match input {
-                Key::Esc => ProgramStatus::Quit,
-                Key::Char('q') => ProgramStatus::Quit,
-                Key::Left => {
-                    app.tabs.previous();
-                    ProgramStatus::Resume
-                }
-                Key::Right => {
-                    app.tabs.next();
-                    ProgramStatus::Resume
-                }
-                Key::Down => {
-                    app.cursor = AppCursor::TabContents;
-                    ProgramStatus::Resume
-                }
-                _ => ProgramStatus::Resume,
-            },
+    let key = match event {
+        Event::Input(k) => k,
+        _ => return ProgramStatus::Resume,
+    };
+
+    let result = match app.cursor {
+        AppCursor::TabList => handle_tab_list_input(app, key),
+        AppCursor::TabContents => handle_tab_input(app.tabs.current_mut(), key),
+    };
+
+    let result = match result {
+        Some(r) => r,
+        None => return ProgramStatus::Resume,
+    };
+
+    match result {
+        InputResult::Key(key) => match key {
+            Key::Esc => ProgramStatus::Quit,
+            Key::Char('q') => ProgramStatus::Quit,
             _ => ProgramStatus::Resume,
         },
-        AppCursor::TabContents => match event {
-            Event::Input(input) => match input {
-                Key::Esc => ProgramStatus::Quit,
-                Key::Char('q') => ProgramStatus::Quit,
-                x => match handle_tab_input(app.tabs.current_mut(), x) {
-                    Some(input) => match input {
-                        Key::Up => {
-                            app.cursor = AppCursor::TabList;
-                            ProgramStatus::Resume
-                        }
-                        Key::Char('r') => ProgramStatus::Refresh,
-                        _ => ProgramStatus::Resume,
-                    },
-                    None => ProgramStatus::Resume,
-                },
-            },
-            _ => ProgramStatus::Resume,
-        },
+        InputResult::GoToTabList => {
+            app.cursor = AppCursor::TabList;
+            ProgramStatus::Resume
+        }
+        InputResult::Refresh => ProgramStatus::Refresh,
     }
 }
 
-fn handle_tab_input(tab: &mut Tab, key: Key) -> Option<Key> {
+fn handle_tab_list_input(app: &mut App, key: Key) -> Option<InputResult> {
+    match key {
+        Key::Left => {
+            app.tabs.previous();
+            None
+        }
+        Key::Right => {
+            app.tabs.next();
+            None
+        }
+        Key::Down => {
+            app.cursor = AppCursor::TabContents;
+            None
+        }
+        k => Some(InputResult::Key(k)),
+    }
+}
+
+fn handle_tab_input(tab: &mut Tab, key: Key) -> Option<InputResult> {
     match &mut tab.tab_type {
         TabType::Media(media_tab) => handle_media_tab_input(media_tab, key),
-        _ => Some(key),
+        TabType::Unknown => Some(InputResult::Key(key)),
     }
 }
 
-fn handle_media_tab_input(media_tab: &mut MediaTab, key: Key) -> Option<Key> {
+fn handle_media_tab_input(media_tab: &mut MediaTab, key: Key) -> Option<InputResult> {
     match media_tab.cursor {
         MediaCursor::MediaListOut => match key {
-            Key::Up => Some(key),
+            Key::Up => Some(InputResult::GoToTabList),
             Key::Char('\n') => {
                 media_tab.cursor = MediaCursor::MediaListIn;
                 None
             }
             Key::Char('p') => play_media(media_tab),
-            _ => None,
+            k => Some(InputResult::Key(k)),
         },
         MediaCursor::MediaListIn => match key {
             Key::Up => {
@@ -233,13 +242,12 @@ fn handle_media_tab_input(media_tab: &mut MediaTab, key: Key) -> Option<Key> {
                 media_tab.cursor = MediaCursor::MediaListOut;
                 None
             }
-            _ => None,
+            k => Some(InputResult::Key(k)),
         },
-        _ => None,
     }
 }
 
-fn play_media(media_tab: &MediaTab) -> Option<Key> {
+fn play_media(media_tab: &MediaTab) -> Option<InputResult> {
     let args: Vec<&str> = media_tab
         .command
         .args
@@ -261,7 +269,7 @@ fn play_media(media_tab: &MediaTab) -> Option<Key> {
         .wait()
         .expect("Should wait on media process correctly");
 
-    Some(Key::Char('r'))
+    Some(InputResult::Refresh)
 }
 
 fn build_app(settings: Vec<TabSettings>) -> App {
@@ -319,7 +327,9 @@ fn build_media(settings: &TabSettings) -> MediaTab {
                         None => false,
                     });
 
-                files.sort_by_key(|file| String::from(file.file_name().unwrap().to_str().unwrap().to_uppercase()));
+                files.sort_by_key(|file| {
+                    String::from(file.file_name().unwrap().to_str().unwrap().to_uppercase())
+                });
 
                 media.append(&mut files);
             }
