@@ -237,6 +237,7 @@ fn handle_media_tab_input(media_tab: &mut MediaTab, key: Key) -> Option<InputRes
                 media_tab.media.next();
                 None
             }
+            Key::Char('r') => remove_media(media_tab),
             Key::Char('p') => play_media(media_tab),
             Key::Char('\n') => {
                 media_tab.cursor = MediaCursor::MediaListOut;
@@ -245,6 +246,21 @@ fn handle_media_tab_input(media_tab: &mut MediaTab, key: Key) -> Option<InputRes
             k => Some(InputResult::Key(k)),
         },
     }
+}
+
+fn remove_media(media_tab: &mut MediaTab) -> Option<InputResult> {
+    Command::new("rm")
+        .args(&[media_tab
+            .media
+            .current()
+            .to_str()
+            .expect("Path to media should be valid UTF-8")])
+        .output()
+        .expect("Media should be successfully removed");
+
+    media_tab.media.remove();
+
+    None
 }
 
 fn play_media(media_tab: &MediaTab) -> Option<InputResult> {

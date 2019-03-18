@@ -29,4 +29,8 @@ impl<T> SelectLoop<T> {
     pub fn current_mut(&mut self) -> &mut T {
         &mut self.items[self.index]
     }
+
+    pub fn remove(&mut self) {
+        self.items.remove(self.index);
+    }
 }
