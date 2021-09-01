@@ -1,0 +1,19 @@
+[tv]
+   name = "TV Shows"
+   kind = "media"
+   media_dirs = [ "/mnt/data/Videos/" ]
+   media_types = [ "mp4", "mkv", "avi" ]
+	priority = 20
+	[tv.command]
+		program = "mpv"
+		args = [ "{0}" ]
+
+[movies]
+   name = "Movies"
+   kind = "media"
+   media_dirs = [ "/mnt/data/Videos/" ]
+   media_types = [ "mp4", "mkv", "avi" ]
+	priority = 20
+	[movies.command]
+		program = "mpv"
+		args = [ "{0}" ]
