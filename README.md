@@ -7,7 +7,7 @@ stopped working.
 
 ## Configuration
 
-This project uses https://crates.io/crates/directories to determine the director to expect a `simon.config.toml` configuration file at.
+This project uses https://crates.io/crates/directories to determine the directory to expect a `simon.config.toml` configuration file at.
 Typically for a linux box this would be `/home/username/.config/simon/simon.config.toml`.
 In that file it expects a configuration like [this](example.config.toml)
 
@@ -16,8 +16,11 @@ In that file it expects a configuration like [this](example.config.toml)
 Once you launch `simon` from the command line you will be presented with a TUI based on your configuration.
 
 Arrow-Keys control the cursor
+
 Pressing Enter will move from region selection to item selection and back
+
 Pressing P will start playing a media item
+
 Pressing Q will quit out of Simon.
 
 ## Cross-Compilation
